@@ -1,2 +1,5 @@
 # WorldQuizzle
-Reti e Laboratorio, Unipi, Project 
+Reti e Laboratorio, Unipi
+Maven Project
+
+All rights reserved
