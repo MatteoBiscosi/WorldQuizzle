@@ -1,8 +1,10 @@
 package mbiscosi.wq.client;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.net.SocketException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.rmi.NotBoundException;
@@ -28,6 +30,8 @@ public class OperationsImpl implements Operations{
 	private static ByteBuffer buffer;
 	private static int connesso = 0;
 	private String msg = null;
+	
+	private int udpPort;
 	
 	
 	
@@ -80,7 +84,17 @@ public class OperationsImpl implements Operations{
 		
 		client = SocketChannel.open(address);
 		
-		int response = richiestaTCP("login " + username + " " + password);
+		for(udpPort = 1200; udpPort < 65353; udpPort++) {
+			try {
+				Thread thread = new Thread(new UdpHandler(InetAddress.getLocalHost(), udpPort, username));
+				thread.start();
+				break;
+			} catch(SocketException e) {}
+		}
+		
+		//System.out.println(udpPort);
+		
+		int response = richiestaTCP("login " + username + " " + password + " " + udpPort);
 		
 		
 		if(response == -1) {
@@ -88,6 +102,7 @@ public class OperationsImpl implements Operations{
 				client.close();
 			} catch (IOException e) {}
 			MainClassClient.terminazione = true;
+			UdpHandler.shutdown();
 		}
 
 		else if(response == 0) {
@@ -95,6 +110,8 @@ public class OperationsImpl implements Operations{
 			try {
 				client.close();
 			} catch (IOException e) {}
+			
+			UdpHandler.shutdown();
 		}
 		
 		
@@ -103,6 +120,8 @@ public class OperationsImpl implements Operations{
 			try {
 				client.close();
 			} catch (IOException e) {}
+			
+			UdpHandler.shutdown();
 		}
 
 		
@@ -223,8 +242,100 @@ public class OperationsImpl implements Operations{
 
 	@Override
 	public String sfida(String username, String userAmico) {
-		// TODO Auto-generated method stub
-		return null;
+		if(connesso == 0) {
+			return "Prima di effettuare tale operazione si prega di effettuare il login";
+		}
+		
+		System.out.println("Sfida in attesa di essere accettata...");
+		
+		MainClassClient.setTimer(System.currentTimeMillis());
+		
+		int response = richiestaTCPNonBlock("sfida " + username + " " + userAmico);
+		
+		switch(response) {
+		case 2:
+			msg = "Sfida rifiutata";
+			break;
+		
+		case 1:
+			System.out.println("Sfida accettata, preparazione della sfida in corso...");
+			cicloSfida();
+			break;
+		
+		
+		case 0:
+			msg = "Utente amico già in sfida";
+			break;
+			
+		
+		case -1:
+			msg = "Utente amico non presente nella lista degli amici";
+			break;
+			
+			
+		case -2: 
+			msg = "Amico al momento non connesso";
+			break;
+			
+			
+		case -3: 
+			msg = "Errore nella richiesta di sfida, riprovare più tardi";
+			break;
+		}
+		
+		
+		
+		return msg;
+	}
+	
+	
+	
+	
+	@Override
+	public String accettaSfida(String response, String username, String userAmico) {
+		if(connesso == 0) {
+			return "Prima di effettuare tale operazione si prega di effettuare il login";
+		}
+		
+		
+		int codResponse = richiestaTCP("accettaSfida " + response + " " + username + " " + userAmico);
+		
+		switch(codResponse) {
+		case 2:
+			msg = "Sfida rifiutata";
+			break;
+		
+			
+		case 1:
+			System.out.println("Sfida accetta, preparazione della sfida in corso...");
+			cicloSfida();
+			msg = "dio";
+			break;
+		
+		
+		case 0:
+			msg = "Utente amico già in sfida";
+			break;
+			
+		
+		case -1:
+			msg = "Utente amico non presente nella lista degli amici";
+			break;
+			
+			
+		case -2: 
+			msg = "Amico al momento non connesso";
+			break;
+			
+			
+		case -3: 
+			msg = "Errore nella richiesta di sfida, riprovare più tardi";
+			break;
+		}
+		
+		
+		MainClassClient.sfida.set(false);
+		return msg;
 	}
 
 
@@ -274,6 +385,8 @@ public class OperationsImpl implements Operations{
 		buffer.put(request.getBytes());
 		buffer.flip();
 		
+		//System.out.println(request);
+		
 		
 		while(buffer.hasRemaining()) {
 			try {
@@ -288,12 +401,12 @@ public class OperationsImpl implements Operations{
 		
 		
 		buffer.clear();
-		byte[] tmp;
+		
 		//int bytes = 0;
-		int counter;
+		//int counter;
 		//attendo la risposta e la confronto con la precedente
 		try {
-			counter = client.read(buffer);
+			client.read(buffer);
 			/*while((counter = client.read(buffer)) != 0) {
 				
 				bytes += counter;
@@ -311,12 +424,93 @@ public class OperationsImpl implements Operations{
 			return -1;
 		}
 		
-		tmp = new byte[counter];
+		
 		buffer.flip();
 		
-		buffer.get(tmp, 0, counter);
+		byte[] tmp = new byte[buffer.limit()];
+		buffer.get(tmp);
 		int response = Integer.parseInt(new String(tmp));
 		buffer.clear();
+		
+		
+		System.out.println(response);
+		return response;
+	}
+	
+	
+	
+	
+	private int richiestaTCPNonBlock(String request) {
+		//invio la stringa al server
+		
+		try {
+			client.configureBlocking(false);
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		
+		buffer.put(request.getBytes());
+		buffer.flip();
+		
+		//System.out.println(request);
+		
+		
+		while(buffer.hasRemaining()) {
+			try {
+				client.write(buffer);
+			//Se viene lanciata l'eccezione è perchè il server è terminato,
+			//per cui termino anche il client
+			} catch (IOException e) {
+				msg = "Connessione terminata dal server, chiusura del client in corso...";	
+				return -1;
+			}
+		}
+		
+		
+		buffer.clear();
+		
+		int counter;
+		//attendo la risposta e la confronto con la precedente
+		try {
+			//client.read(buffer);
+			while(System.currentTimeMillis() - MainClassClient.getTimer() < 30000) {
+				counter = client.read(buffer);
+				
+				if(counter == -1) {
+					System.out.println("Server terminato, chiusura del client...\r\n");
+					client.close();
+					return -1;
+				}
+				
+				if(counter > 0)
+					break;
+				
+				System.out.println(counter);
+			}
+			System.out.println();
+		} catch (IOException e) {
+			msg = "Server terminato, chiusura del client...";
+			return -1;
+		}
+		
+		if(System.currentTimeMillis() - MainClassClient.getTimer() > 30000)
+			buffer.put("2".toString().getBytes());
+		
+		buffer.flip();
+		
+		byte[] tmp = new byte[buffer.limit()];
+		buffer.get(tmp);
+		int response = Integer.parseInt(new String(tmp));
+		buffer.clear();
+		
+		
+		System.out.println(response);
+		
+		try {
+			client.configureBlocking(true);
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
 		
 		return response;
 	}
@@ -439,5 +633,10 @@ public class OperationsImpl implements Operations{
 		} catch (ParseException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	
+	private void cicloSfida() {
+		
 	}
 }

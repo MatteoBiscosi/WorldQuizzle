@@ -69,4 +69,8 @@ public interface Operations {
 	 * mostra la classifica tra gli utenti username e la sua lista di amici. 
 	 */
 	public String mostraClassifica(String username);
+	
+	
+	
+	public String accettaSfida(String response, String username, String userAmico); 
 }

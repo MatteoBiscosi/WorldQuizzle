@@ -1,6 +1,7 @@
 package mbiscosi.wq.server;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
@@ -24,6 +25,7 @@ public class ServerService implements Runnable{
 	
 	private ConcurrentHashMap<String, UserInfo> connessioni;
 	private ConcurrentHashMap<String, ArrayList<String>> utenti;
+	private ConcurrentHashMap<String, ChallengeUtilities> utenti;
 	private JsonCreator json;
 	private Selector mainSelector;
 	private ServerSocketChannel server;
@@ -34,7 +36,7 @@ public class ServerService implements Runnable{
 	private int port;
 	public static boolean terminate;
 	private int counter;
-	private SupportSelector[] selectors;
+	private WorkerSelector[] selectors;
 	
 	
 	public ServerService(int port) {
@@ -72,11 +74,11 @@ public class ServerService implements Runnable{
 			//Faccio un array di selector, ognuno dei quali verrà gestito da un thread differente 
 			//e saranno quelli che accetteranno le richieste dei clients
 			secondarySelectors = new Thread[10];
-			selectors = new SupportSelector[10];
+			selectors = new WorkerSelector[10];
 			
 			for(int i = 0; i < 10; i++) {
 				try {
-					selectors[i] = new SupportSelector(this);
+					selectors[i] = new WorkerSelector(this, i);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
@@ -125,9 +127,10 @@ public class ServerService implements Runnable{
 				
 				
 				//Faccio un ciclo per tutte le chiavi che mi arrivano e le invio al dispatcher
-				while(iterator.hasNext()) 
+				while(iterator.hasNext())
 					dispatch((SelectionKey) iterator.next());
 				
+				set.clear();
 				
 				
 			} catch (IOException e) {			
@@ -152,7 +155,6 @@ public class ServerService implements Runnable{
 	 * Procedura utilizzata per aggiungere un elemento al selectors i-esimo
 	 */
 	private void dispatch(SelectionKey key) {
-		System.out.println("Dispatcher attivo");
 		Acceptor acceptor = (Acceptor) key.attachment();
 		if(acceptor != null) {
 			Thread tmp = new Thread(acceptor);
@@ -169,6 +171,8 @@ public class ServerService implements Runnable{
 		public synchronized void run() {
 			try {
 				SocketChannel client = server.accept();
+				//client.
+				
 				
 				//Aggiungo il client al selector e controllo il next
 				if(client != null) {
@@ -218,6 +222,10 @@ public class ServerService implements Runnable{
 	
 	public JsonCreator getJson() {
 		return json;
+	}
+	
+	public WorkerSelector getSelector(int selectorNum) {
+		return this.selectors[selectorNum];
 	}
 	
 	public void stampaConnessioni() {

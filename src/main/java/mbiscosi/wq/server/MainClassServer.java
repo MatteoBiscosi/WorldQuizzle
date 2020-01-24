@@ -2,6 +2,7 @@ package mbiscosi.wq.server;
 
 
 
+import java.io.IOException;
 import java.rmi.AlreadyBoundException;
 import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
@@ -21,9 +22,13 @@ public class MainClassServer {
 		
 		//System.setProperty("java.rmi.server.hostname","192.168.56.1");
 		//Controllo i parametri in Input
+		
 		if(args.length != 1)			
 			//Lettura del json file e instaurazione delle varie strutture
+			//In caso di inserimento della porta in input, gliela passo, se c'è qualche problema
+			//o se non è stata inserita la porta gli passo la standard 13200
 			server = new ServerService(-1);
+			
 		
 		else {
 			try {
@@ -31,7 +36,6 @@ public class MainClassServer {
 			} catch (RuntimeException ex) {
 				ex.printStackTrace();
 				server = new ServerService(-1);
-				
 			}
 		}
 		System.out.println("Secondi: " + (System.currentTimeMillis() - timer));
@@ -45,8 +49,8 @@ public class MainClassServer {
 			stub = new Connection(server);
 			
 			
-			LocateRegistry.createRegistry(1099);
-			reg = LocateRegistry.getRegistry();
+			reg = LocateRegistry.createRegistry(1099);
+			//reg = LocateRegistry.getRegistry();
 			
 			reg.rebind("registrazione", stub);
 			
@@ -66,16 +70,16 @@ public class MainClassServer {
 			
 			while(!tmp) {
 				if(sc.next().equalsIgnoreCase("termina")) {
-					try {
-						reg.unbind("registrazione");
-					} catch (NotBoundException e) {
-						e.printStackTrace();
-					}
 					server.shutdown();
 					tmp = true;
 				}
 			}
 			
+			//
+			if(reg != null) {
+				UnicastRemoteObject.unexportObject(reg, true);
+				System.out.println("Registro liberato");
+			}
 			
 			try {
 				thread.interrupt();
@@ -88,5 +92,7 @@ public class MainClassServer {
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		}
+		
+		System.exit(0);
 	}
 }
