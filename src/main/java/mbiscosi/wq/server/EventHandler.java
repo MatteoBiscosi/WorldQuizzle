@@ -93,6 +93,26 @@ public class EventHandler {
 		case "accettaSfida":
 			accettaSfida(splitting[1], splitting[2], splitting[3]);
 			break;
+			
+			
+		case "sfidaPronto":
+			sfidaPronta(splitting[1]);
+			break;
+			
+			
+		case "parolaSfida":
+			parolaSfida(Integer.parseInt(splitting[1]), splitting[2], Integer.parseInt(splitting[3]));
+			break;
+			
+			
+		case "rispostaParola":
+			rispostaParola(Integer.parseInt(splitting[1]), splitting[2], Integer.parseInt(splitting[3]), splitting[4]);
+			break;
+			
+			
+		case "termineSfida":
+			termineSfida(splitting[1], Integer.parseInt(splitting[2]), splitting[3]);
+			break;
 		}
 		
 		
@@ -194,7 +214,9 @@ public class EventHandler {
 		
 		else {
 			response = "1";
-			server.getJson().scriviJSON(username, null, userAmico);
+			server.getJson().getLock().lock();
+			server.getJson().scriviJSON(username, null, userAmico, null);
+			server.getJson().getLock().unlock();
 			tmp.add(userAmico);
 		}
 	}
@@ -204,7 +226,7 @@ public class EventHandler {
 	
 	
 	/*
-	 * OPERAZIONE DI AGGIUNTA AMICO:
+	 * OPERAZIONE DI LISTA AMICI:
 	 * abbiamo i seguenti possibili casi:
 	 * - username ha gia come amico userAmico (ritorno messaggio di errore adeguato)
 	 * - username non esiste (ritorno un messaggio di errore adeguato)
@@ -386,8 +408,25 @@ public class EventHandler {
 		lockSfida2 = server.getConnessioni().get(username);
 		
 		
-		if(risposta.equals("si")) {
+		if(risposta.equalsIgnoreCase("si")) {
 			if(user2.getConnesso() == 1) {
+				//Genero la partita, inserendo un nuovo elemento nella map corrispondente
+				Random randSfide = new Random();
+				int numSfide = randSfide.nextInt(10);
+				
+				while(numSfide < 4) {
+					numSfide = randSfide.nextInt(10);
+				}
+				
+				System.out.println("Preparazione delle parole " + numSfide);
+				
+				ChallengeUtilities prova = new ChallengeUtilities(numSfide, server);
+				
+				server.getMapSfida().put(userAmico + username, prova);
+				
+				//Preparo la risposta da mandare al client che ha accettato la sfida
+				this.response = "1";	
+				
 				Utilities tmp = (Utilities) user2.getKey().attachment();
 				
 				//Preparo la risposta da mandare al client che ha richiesto la sfida
@@ -398,8 +437,7 @@ public class EventHandler {
 				
 				server.getSelector(user2.getSelectorNum()).setWrite(user2.getKey());
 				
-				//Preparo la risposta da mandare al client che ha accettato la sfida
-				this.response = "1";
+							
 			} else {
 				//In caso il client che ha chiesto la sfida si sia disconnesso
 				this.response = "-1";
@@ -434,5 +472,208 @@ public class EventHandler {
 			//Preparo la risposta da mandare al client che ha accettato la sfida
 			this.response = "2";
 		}
+	}
+	
+	
+	
+	
+	
+	//richiedere la traduzione delle parole al server
+	/*
+	 * Sequenza: - Controllo che non siano state tradotte e che la variabile serverRaggiungibile sia == 1, 
+	 * 				altrimenti il server di traduzione non è raggiungibile e rispondo con un errore
+	 * 
+	 * 			 - Richiamo la funzione translateWords, se catcho una IoException annullo la sfida
+	 * 
+	 * 			 - Ritorno 1 in caso la traduzione sia andata bene, -1 in caso alternativo
+	 * 
+	 * 			 - Se la variabile serverRaggiungibile == 0, vuol dire che l'altro sfidante ha già chiesto la traduzione
+	 * 				ma il servizio non è raggiungibile, per cui tolgo la keyMap dalla sfida e la termino
+	 */
+
+	public void sfidaPronta(String keyMap) {
+		
+		ChallengeUtilities tmp = server.getMapSfida().get(keyMap);
+		
+		Integer numParole = tmp.getNumParole();
+		
+		tmp.getLockParoleSfida().lock();
+		
+		if(tmp.getServerRaggiungibile() == 1) {
+			if(tmp.getTraduzione() == null) {
+				try {
+					tmp.translateWords();
+				} catch (IOException e) {
+					tmp.setServerRaggiungibile(0);
+					tmp.getLockParoleSfida().unlock();
+					this.response = "-1";
+					return;
+				}
+			}
+			
+			tmp.getLockParoleSfida().unlock();
+			this.response =  numParole.toString();
+		}
+		
+		else {
+			tmp.getLockParoleSfida().unlock();
+			this.response = "-1";
+			return;
+		}
+	}
+	
+	
+	
+	/*
+	 * OPERAZIONE DI AGGIUNTA AMICO:
+	 * abbiamo i seguenti possibili casi:
+	 * - username ha gia come amico userAmico (ritorno messaggio di errore adeguato)
+	 * - username non esiste (ritorno un messaggio di errore adeguato)
+	 * - username esiste ma utente non connesso (ritorno messaggio di errore adeguato)
+	 * - username e userAmico esistono e l'aggiunta va a buon fine (ritorno messaggio di successo)
+	 * - userAmico non esiste (ritorno messaggio di errore adeguato)
+	 */
+	public void rispostaParola(int numParola, String keyMap, int tipo, String traduzione) {
+		ChallengeUtilities tmp = server.getMapSfida().get(keyMap);
+		
+		this.response = tmp.checkWords(numParola, traduzione, tipo);;
+	}
+	
+	
+	
+	/*
+	 * OPERAZIONE DI AGGIUNTA AMICO:
+	 * abbiamo i seguenti possibili casi:
+	 * - username ha gia come amico userAmico (ritorno messaggio di errore adeguato)
+	 * - username non esiste (ritorno un messaggio di errore adeguato)
+	 * - username esiste ma utente non connesso (ritorno messaggio di errore adeguato)
+	 * - username e userAmico esistono e l'aggiunta va a buon fine (ritorno messaggio di successo)
+	 * - userAmico non esiste (ritorno messaggio di errore adeguato)
+	 */
+	public void termineSfida(String keyMap, int tipo, String username) {
+		ChallengeUtilities tmp = server.getMapSfida().get(keyMap);
+		
+		switch(tipo) {
+		
+			//Sfidante
+			case 0:
+				tmp.setIndexSfidante(tmp.getNumParole() - 1);
+				
+				if(tmp.getIndexSfidato() != (tmp.getNumParole() - 1) && tmp.getUserSfidato() == 0) {
+					this.response = "-1";
+				}
+				else {
+					tmp.getLockParoleSfida().lock();
+					tmp.setUserSfidante(1);
+					
+					int punteggio = tmp.getPuntSfidante();
+					
+					//vittoria
+					if(punteggio > tmp.getPuntSfidato())
+						this.response = "Congratulazioni, hai vinto!\r\nHai totalizzato " + punteggio + 
+									" punti, mentre l'avversario ha totalizzato " + tmp.getPuntSfidato() + " punti";
+					//sconfitta
+					else
+						this.response = "Spiacente, hai perso!\r\nHai totalizzato " + punteggio + 
+						" punti, mentre l'avversario ha totalizzato " + tmp.getPuntSfidato() + " punti";
+					
+
+					if(tmp.getUserSfidato() == 1) {
+						tmp.getLockParoleSfida().unlock();
+						server.getMapSfida().remove(keyMap);
+					}
+					else
+						tmp.getLockParoleSfida().unlock();
+					
+					
+					UserInfo tmpUser = server.getConnessioni().get(username);
+					
+					punteggio = tmpUser.getPunteggio() + punteggio;
+					
+					if(punteggio > 0) 						
+						tmpUser.setPunteggio(punteggio);
+					
+					else {
+						tmpUser.setPunteggio(0);
+						punteggio = 0;
+					}
+					
+					server.getJson().getLock().lock();
+					server.getJson().scriviJSON(username, null, null, Integer.toString(punteggio));
+					server.getJson().getLock().unlock();
+					server.getConnessioni().get(username).setAttualmenteInSfida(0);
+				}
+				
+				break;
+				
+			//Sfidato
+			case 1:
+				tmp.setIndexSfidato(tmp.getNumParole() - 1);
+				
+				if(tmp.getIndexSfidante() != (tmp.getNumParole() - 1) && tmp.getUserSfidante() == 0) {
+					this.response = "-1";
+				}
+				else {
+					tmp.getLockParoleSfida().lock();
+					tmp.setUserSfidato(1);
+					
+					int punteggio = tmp.getPuntSfidato();
+					
+					//vittoria
+					if(punteggio > tmp.getPuntSfidante())
+						this.response = "Congratulazioni, hai vinto!\r\nHai totalizzato " + punteggio + 
+									" punti, mentre l'avversario ha totalizzato " + tmp.getPuntSfidante() + " punti";
+					//sconfitta
+					else
+						this.response = "Spiacente, hai perso!\r\nHai totalizzato " + punteggio + 
+						" punti, mentre l'avversario ha totalizzato " + tmp.getPuntSfidante() + " punti";
+					
+
+					if(tmp.getUserSfidante() == 1) {
+						tmp.getLockParoleSfida().unlock();
+						server.getMapSfida().remove(keyMap);
+					}
+					else 
+						tmp.getLockParoleSfida().unlock();
+					
+					
+					UserInfo tmpUser = server.getConnessioni().get(username);
+					
+					punteggio = tmpUser.getPunteggio() + punteggio;
+					
+					if(punteggio > 0) 						
+						tmpUser.setPunteggio(punteggio);
+					
+					else {
+						tmpUser.setPunteggio(0);
+						punteggio = 0;
+					}
+					
+					server.getJson().getLock().lock();
+					server.getJson().scriviJSON(username, null, null, Integer.toString(punteggio));
+					server.getJson().getLock().unlock();
+					server.getConnessioni().get(username).setAttualmenteInSfida(0);
+				}
+				
+				break;
+		}
+	}
+	
+	
+	
+	
+	/*
+	 * OPERAZIONE DI AGGIUNTA AMICO:
+	 * abbiamo i seguenti possibili casi:
+	 * - username ha gia come amico userAmico (ritorno messaggio di errore adeguato)
+	 * - username non esiste (ritorno un messaggio di errore adeguato)
+	 * - username esiste ma utente non connesso (ritorno messaggio di errore adeguato)
+	 * - username e userAmico esistono e l'aggiunta va a buon fine (ritorno messaggio di successo)
+	 * - userAmico non esiste (ritorno messaggio di errore adeguato)
+	 */
+	public void parolaSfida(int i, String keyMap, int tipo) {
+		ChallengeUtilities tmp = server.getMapSfida().get(keyMap);
+		
+		this.response =  tmp.getParoleSfida().get(i);
 	}
 }

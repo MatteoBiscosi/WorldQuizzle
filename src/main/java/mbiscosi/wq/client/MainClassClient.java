@@ -79,7 +79,7 @@ public class MainClassClient {
 								sfida.set(false);
 								break;
 							}
-							System.out.println(op.accettaSfida("si", username, splitting[1]));
+							op.accettaSfida("si", username, splitting[1]);
 							break;
 						}
 						
@@ -175,7 +175,7 @@ public class MainClassClient {
 			
 			
 			/*
-			 * LOGOUT
+			 * AGGIUNTA AMICO
 			 */
 			else if(splitting[0].equalsIgnoreCase("aggiungi_amico")) {
 				if(splitting.length != 2 || splitting[1] == null) {
@@ -240,7 +240,7 @@ public class MainClassClient {
 					continue;
 				}
 				
-				System.out.println(op.sfida(username, splitting[1]));
+				op.sfida(username, splitting[1]);
 			}
 			
 			

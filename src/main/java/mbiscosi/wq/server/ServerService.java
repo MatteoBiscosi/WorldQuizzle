@@ -25,7 +25,8 @@ public class ServerService implements Runnable{
 	
 	private ConcurrentHashMap<String, UserInfo> connessioni;
 	private ConcurrentHashMap<String, ArrayList<String>> utenti;
-	private ConcurrentHashMap<String, ChallengeUtilities> utenti;
+	private ConcurrentHashMap<String, ChallengeUtilities> mapSfida;
+	private ArrayList<String> parole;
 	private JsonCreator json;
 	private Selector mainSelector;
 	private ServerSocketChannel server;
@@ -56,6 +57,10 @@ public class ServerService implements Runnable{
 		
 		//La hash map per gli utenti, che fa da lista di adiacenza
 		utenti = new ConcurrentHashMap<String, ArrayList<String>>();
+		
+		parole = new ArrayList<String>();
+		
+		mapSfida = new ConcurrentHashMap<String, ChallengeUtilities>();
 		
 		//Alloco il json, se non esiste lo creo, altrimenti lo leggo e 
 		//mi salvo le info nelle due strutture, connessioni e utenti 
@@ -207,6 +212,13 @@ public class ServerService implements Runnable{
 	}
 	
 	
+	private void stampaParole() {
+		for(int i = 0; i < parole.size(); i++) {
+			System.out.println(parole.get(i));
+		}
+	}
+	
+	
 	
 	public void shutdown() {
 		terminate = true;
@@ -227,6 +239,15 @@ public class ServerService implements Runnable{
 	public WorkerSelector getSelector(int selectorNum) {
 		return this.selectors[selectorNum];
 	}
+	
+	public ArrayList<String> getParole() {
+		return parole;
+	}	
+
+	public ConcurrentHashMap<String, ChallengeUtilities> getMapSfida() {
+		return mapSfida;
+	}
+	
 	
 	public void stampaConnessioni() {
 		Iterator<Entry<String, UserInfo>> it = connessioni.entrySet().iterator();

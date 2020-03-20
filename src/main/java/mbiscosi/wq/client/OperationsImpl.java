@@ -1,6 +1,8 @@
 package mbiscosi.wq.client;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -12,6 +14,7 @@ import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -19,6 +22,7 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
 import mbiscosi.wq.server.ConnectionInterface;
+
 
 public class OperationsImpl implements Operations{
 	
@@ -31,6 +35,7 @@ public class OperationsImpl implements Operations{
 	private static int connesso = 0;
 	private String msg = null;
 	
+	private AtomicBoolean sfidaTerminata = new AtomicBoolean(true);
 	private int udpPort;
 	
 	
@@ -94,7 +99,7 @@ public class OperationsImpl implements Operations{
 		
 		//System.out.println(udpPort);
 		
-		int response = richiestaTCP("login " + username + " " + password + " " + udpPort);
+		int response = Integer.parseInt(richiestaTCP("login " + username + " " + password + " " + udpPort));
 		
 		
 		if(response == -1) {
@@ -144,7 +149,7 @@ public class OperationsImpl implements Operations{
 		}
 		
 		
-		int response = richiestaTCP("logout " + username);
+		int response = Integer.parseInt(richiestaTCP("logout " + username));
 		
 		
 		switch(response) {
@@ -192,7 +197,7 @@ public class OperationsImpl implements Operations{
 		}
 		
 		
-		int response = richiestaTCP("aggiungiAmico " + username + " " + userAmico);
+		int response = Integer.parseInt(richiestaTCP("aggiungiAmico " + username + " " + userAmico));
 		
 		
 		switch(response) {
@@ -259,8 +264,8 @@ public class OperationsImpl implements Operations{
 		
 		case 1:
 			System.out.println("Sfida accettata, preparazione della sfida in corso...");
-			cicloSfida();
-			break;
+			cicloSfida(0, username, userAmico);
+			return null;
 		
 		
 		case 0:
@@ -298,7 +303,7 @@ public class OperationsImpl implements Operations{
 		}
 		
 		
-		int codResponse = richiestaTCP("accettaSfida " + response + " " + username + " " + userAmico);
+		int codResponse = Integer.parseInt(richiestaTCP("accettaSfida " + response + " " + username + " " + userAmico));
 		
 		switch(codResponse) {
 		case 2:
@@ -308,9 +313,9 @@ public class OperationsImpl implements Operations{
 			
 		case 1:
 			System.out.println("Sfida accetta, preparazione della sfida in corso...");
-			cicloSfida();
-			msg = "dio";
-			break;
+			cicloSfida(1, username, userAmico);
+			MainClassClient.sfida.set(false);
+			return null;
 		
 		
 		case 0:
@@ -349,9 +354,7 @@ public class OperationsImpl implements Operations{
 		}
 		
 		
-		int response = richiestaTCP("mostraPunteggio " + username);
-		
-		msg = Integer.toString(response);
+		msg = richiestaTCP("mostraPunteggio " + username);
 		
 		return msg;
 	}
@@ -378,14 +381,12 @@ public class OperationsImpl implements Operations{
 	
 	
 
-	private int richiestaTCP(String request) {
+	private String richiestaTCP(String request) {
 		//invio la stringa al server
 		
 		
 		buffer.put(request.getBytes());
 		buffer.flip();
-		
-		//System.out.println(request);
 		
 		
 		while(buffer.hasRemaining()) {
@@ -395,33 +396,20 @@ public class OperationsImpl implements Operations{
 			//per cui termino anche il client
 			} catch (IOException e) {
 				msg = "Connessione terminata dal server, chiusura del client in corso...";	
-				return -1;
+				return "-1";
 			}
 		}
 		
 		
 		buffer.clear();
 		
-		//int bytes = 0;
-		//int counter;
 		//attendo la risposta e la confronto con la precedente
 		try {
 			client.read(buffer);
-			/*while((counter = client.read(buffer)) != 0) {
-				
-				bytes += counter;
-				if(bytes == -1) {
-					System.out.println("Server terminato, chiusura del client...\r\n");
-					client.close();
-					return -1;
-				}
-				
-				System.out.println(bytes);
-			}*/
-			System.out.println();
+			
 		} catch (IOException e) {
 			msg = "Server terminato, chiusura del client...";
-			return -1;
+			return "-1";
 		}
 		
 		
@@ -429,12 +417,10 @@ public class OperationsImpl implements Operations{
 		
 		byte[] tmp = new byte[buffer.limit()];
 		buffer.get(tmp);
-		int response = Integer.parseInt(new String(tmp));
+		
 		buffer.clear();
 		
-		
-		System.out.println(response);
-		return response;
+		return new String(tmp);
 	}
 	
 	
@@ -636,7 +622,149 @@ public class OperationsImpl implements Operations{
 	}
 	
 	
-	private void cicloSfida() {
+	//0 sfidante
+	//1 sfidato
+	private void cicloSfida(int tipo, String username, String userAmico) {
 		
+		sfidaTerminata.set(false);
+		
+		String keyMap;
+		
+		if(tipo == 0) {
+			keyMap = username + userAmico;
+		}
+		
+		else {
+			keyMap = userAmico + username;
+		}
+		
+		int response = Integer.parseInt(richiestaTCP("sfidaPronto " + keyMap));
+		
+		//Servizio di traduzione non disponibile, ritorno un errore e termino la sfida
+		if(response == -1) {
+			System.out.println("Problema col server di traduzione, sfida al momento non disponibile.\r\nSi prega di riprovare più tardi.");
+			sfidaTerminata.set(true);
+			return;
+		}
+		
+		int esito = 0;
+		
+		System.out.println("Via alla sfida di traduzione!");
+		System.out.println("Hai " + response * 20 + " secondi per tradurre tutte le parole!");
+		
+		
+		BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+		Thread thread = new Thread(new Timer(response * 20, tipo, keyMap, username));
+		thread.start();
+		
+		
+		for(int i = 0; i < response; i++) {
+			if(sfidaTerminata.get())
+				break;
+			//Qui richiedo la parola da tradurre
+			String parola = richiestaTCP("parolaSfida " + i + " " + keyMap + " " + tipo);
+			
+			if(parola.equals("-1") || parola.equals("0"))
+				return;
+			
+			System.out.println("Parola " + (i + 1) + "/" + response + ": " + parola);
+			
+			String traduzione = null;
+			
+			if(sfidaTerminata.get())
+				break;
+			try {
+				traduzione = reader.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			
+			if(!thread.isAlive()) {
+				return;
+			}
+			
+			
+			if(sfidaTerminata.get())
+				break;
+			//che parola ho tradotto + la keymap + se sono sfidante o sfidato + traduzione della parola
+			String tmp = richiestaTCP("rispostaParola " + i + " " + keyMap + " " + tipo + " " + traduzione);
+				
+			if(tmp.equals("-1") || tmp.equals("0"))
+				return;
+		}
+				
+		
+		if(!sfidaTerminata.get()) {
+			System.out.println("Sfida terminata!\r\nVerranno visualizzati i risultati a breve.\r\n"
+					+ "Si prega di attendere il termine della sfida da parte dell'avversario.");
+			sfidaTerminata.set(true);
+			thread.interrupt();
+			
+			String resp = new String();
+			do {
+				resp = richiestaTCP("termineSfida " + keyMap + " " + tipo + " " + username);
+				if(resp.equals("-1")) {
+					try {
+						Thread.sleep(3000);
+					} catch (InterruptedException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				}
+			}
+			while(resp.equals("-1"));
+			
+			System.out.println(resp);
+		}
+	}
+	
+	
+	
+	
+	public class Timer implements Runnable{
+		private int time;
+		private int tipo;
+		private String keyMap;
+		private String username;
+		
+		public Timer(int time, int tipo, String keyMap, String username) {
+			this.time = time;
+			this.tipo = tipo;
+			this.keyMap = keyMap;
+			this.username = username;
+		}
+
+		@Override
+		public void run() {
+			try {
+				Thread.sleep(time*1000);
+				
+				if(!sfidaTerminata.get()) {
+					sfidaTerminata.set(true);
+					System.out.println("Tempo scaduto!\r\nVerranno visualizzati i risultati a breve.");
+					
+					String resp = new String();
+					do {
+						resp = richiestaTCP("termineSfida " + keyMap + " " + tipo + " " + username);
+						if(resp.equals("-1")) {
+							try {
+								Thread.sleep(3000);
+							} catch (InterruptedException e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+					}
+					while(resp.equals("-1"));
+					
+					System.out.println(resp);
+					System.out.println("Premere un qualsiasi tasto per tornare alla scelta dei comandi...");
+				}
+				
+			} catch (InterruptedException e) {
+				//System.out.println("Thread sveglia interrotto");
+				return;
+			}
+		}
 	}
 }

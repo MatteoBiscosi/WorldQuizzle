@@ -23,7 +23,7 @@ public class Connection extends UnicastRemoteObject implements ConnectionInterfa
 			return "Utente già presente, scegliere un altro username";
 		
 		
-		server.getJson().scriviJSON(username, password, null);
+		server.getJson().scriviJSON(username, password, null, null);
 		server.getConnessioni().put(username, new UserInfo(password, 0));
 		server.getUtenti().put(username, new ArrayList<String>());
 		

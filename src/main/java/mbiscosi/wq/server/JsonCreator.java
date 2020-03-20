@@ -11,6 +11,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.concurrent.locks.ReentrantLock;
+
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -23,13 +25,16 @@ import org.json.simple.parser.ParseException;
  */
 public class JsonCreator {
 	private File file;
+	private File dictionary;
 	private ServerService server;
-	
+	private ReentrantLock lock;
 	
 	//Crea un nuovo file .json
 	public JsonCreator(ServerService server) {
 		file = new File("Utenti.json");
+		dictionary = new File("Parole.json");
 		this.server = server;
+		lock = new ReentrantLock();
 		
 		try {
 			if(file.createNewFile())
@@ -83,13 +88,19 @@ public class JsonCreator {
 		
 		//Faccio il parsing del file
 		JSONParser jsonParser = new JSONParser();
+		JSONParser dictionaryParser = new JSONParser();
 		
 		//Apro il file, in mod lettura, e con la NIO lo leggo
-		try (FileChannel reader = FileChannel.open(file.toPath(), StandardOpenOption.READ)) {
+		try (FileChannel reader = FileChannel.open(file.toPath(), StandardOpenOption.READ);
+				FileChannel reader2 = FileChannel.open(dictionary.toPath(), StandardOpenOption.READ)) {
 			
 			int fileSize = (int) file.length();
+			int dictionarySize = (int) dictionary.length();
 			
+			ByteBuffer dicBuffer = ByteBuffer.allocate(dictionarySize);
 			ByteBuffer buffer = ByteBuffer.allocate(fileSize);
+			
+			int bytesDic = 0;
 			int bytesDim = 0;
 			
 			//Controllo che abbia letto tutto il file
@@ -97,23 +108,39 @@ public class JsonCreator {
 				bytesDim += reader.read(buffer);
 			}
 			
+			//Controllo che abbia letto tutto il file
+			while(bytesDic != dictionarySize) {
+				bytesDic += reader2.read(dicBuffer);
+			}
+			
 			//Una volta letto il file, lo faccio diventare una Stringa
 			String text = new String(buffer.array());
+			String textDic = new String(dicBuffer.array());
+			
 			
 			//Faccio il parsing del JSON file
 			Object obj = jsonParser.parse(text);
+			Object obj2 = dictionaryParser.parse(textDic);
 			
 			JSONObject tmp = (JSONObject) obj;
+			JSONObject tmp2 = (JSONObject) obj2;
 			
 			JSONArray utenti = (JSONArray) tmp.get("Utenti");
+			JSONArray parole = (JSONArray) tmp2.get("Parole");
 			
 			Iterator<JSONObject> externIt = utenti.iterator();
+			Iterator<String> externIt2 = parole.iterator();
 			
 			//Ogni ogget del JSON verra aggiunto alle due strutture del server
 			//Questo iterator scorre gli Utenti, mentre quello interno alla procedura
 			//LettoreJsonObj scorre la lista di amici
 			while(externIt.hasNext()) {
 				LettoreJSONObj(externIt.next());
+			}
+			
+			while(externIt2.hasNext()) {
+				String parola = externIt2.next();
+				server.getParole().add(parola);
 			}
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
@@ -127,7 +154,7 @@ public class JsonCreator {
 	
 	
 	
-	public synchronized void scriviJSON(String username, String password, String userAmico) {
+	public synchronized void scriviJSON(String username, String password, String userAmico, String punteggio) {
 		//In questo metodo leggo il JSON e per ogni oggetto di tipo JSONObject contenuto
 		//all'interno dell'array JSONArray, lo mando al ThreadPoolExecutor
 		
@@ -181,6 +208,10 @@ public class JsonCreator {
 					aggiungiAmico(username, utenti, userAmico);
 				}
 				
+				else if(punteggio != null) {
+					modificaPunteggio(username, utenti, Integer.parseInt(punteggio));
+				}
+				
 				String text2 = tmp.toJSONString();
 				ByteBuffer buffer = ByteBuffer.allocate(text2.length());
 					
@@ -232,6 +263,7 @@ public class JsonCreator {
 	
 	
 	
+	
 	public void aggiungiAmico(String username, JSONArray utenti, String userAmico) {
 		
 		int counter = 0;
@@ -264,6 +296,23 @@ public class JsonCreator {
 				
 				if(counter == 2)
 					return;
+			}
+		}
+	}
+	
+	
+	
+	public void modificaPunteggio(String username, JSONArray utenti, int punteggio) {
+		
+		int counter = 0;
+		
+		Iterator<JSONObject> externIt = utenti.iterator();
+		
+		while(externIt.hasNext()) {
+			JSONObject internIt = externIt.next();
+			
+			if(((String) internIt.get("Username")).equals(username)) {
+				internIt.replace("Punteggio", punteggio);
 			}
 		}
 	}
@@ -333,4 +382,9 @@ public class JsonCreator {
 	public File getFile() {
 		return file;
 	}
+	
+	
+	public ReentrantLock getLock() {
+		return lock;
+	}	
 }
