@@ -5,6 +5,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectableChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
@@ -18,15 +19,28 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public class ServerService implements Runnable{
+	/*
+	 * Classe che gestisce il server principale, tutte le strutture dati e i file JSON
+	 * utilizzati per il funzionamento corretto del server
+	 */
 	
 	private static int BUFFER_SIZE = 1024;
 	private static int DEFAULT_PORT = 13200;
 	
-	
+	//STRUTTURE DATI
+	//Utenti connessi e le loro info
 	private ConcurrentHashMap<String, UserInfo> connessioni;
+	//Utenti connessi con le loro liste di amici
 	private ConcurrentHashMap<String, ArrayList<String>> utenti;
+	//Sfide con le utility della sfida
 	private ConcurrentHashMap<String, ChallengeUtilities> mapSfida;
+	//Associazione tra un channel e l'username connesso a quel channel
+	private ConcurrentHashMap<SelectableChannel, String> channelUtenti;
+	//Parole da tradurre nella sfida
 	private ArrayList<String> parole;
+	
+	
+	
 	private JsonCreator json;
 	private Selector mainSelector;
 	private ServerSocketChannel server;
@@ -51,6 +65,9 @@ public class ServerService implements Runnable{
 		
 		else
 			this.port = port;
+		
+		//La hash map per associare ad ogni channel l'username connesso
+		channelUtenti = new ConcurrentHashMap<SelectableChannel, String>();
 		
 		//La hash map per le connessioni
 		connessioni = new ConcurrentHashMap<String, UserInfo>();
@@ -77,7 +94,7 @@ public class ServerService implements Runnable{
 			
 			
 			//Faccio un array di selector, ognuno dei quali verrà gestito da un thread differente 
-			//e saranno quelli che accetteranno le richieste dei clients
+			//e saranno quelli che gestiranno le richieste dei clients
 			secondarySelectors = new Thread[10];
 			selectors = new WorkerSelector[10];
 			
@@ -122,7 +139,6 @@ public class ServerService implements Runnable{
 		
 		while(!terminate) {
 			try {
-				System.out.println("Server in attesa sulla select...");
 				//mi metto in attesa sulla select
 				mainSelector.select();
 				
@@ -162,8 +178,7 @@ public class ServerService implements Runnable{
 	private void dispatch(SelectionKey key) {
 		Acceptor acceptor = (Acceptor) key.attachment();
 		if(acceptor != null) {
-			Thread tmp = new Thread(acceptor);
-			tmp.start();
+			acceptor.run();
 		}
 	}
 	
@@ -172,12 +187,10 @@ public class ServerService implements Runnable{
 	/*
 	 * Classe utilizzata per fare da Acceptor
 	 */
-	private class Acceptor implements Runnable{
+	private class Acceptor {
 		public synchronized void run() {
 			try {
-				SocketChannel client = server.accept();
-				//client.
-				
+				SocketChannel client = server.accept();				
 				
 				//Aggiungo il client al selector e controllo il next
 				if(client != null) {
@@ -212,13 +225,6 @@ public class ServerService implements Runnable{
 	}
 	
 	
-	private void stampaParole() {
-		for(int i = 0; i < parole.size(); i++) {
-			System.out.println(parole.get(i));
-		}
-	}
-	
-	
 	
 	public void shutdown() {
 		terminate = true;
@@ -248,23 +254,11 @@ public class ServerService implements Runnable{
 		return mapSfida;
 	}
 	
-	
-	public void stampaConnessioni() {
-		Iterator<Entry<String, UserInfo>> it = connessioni.entrySet().iterator();
-		while (it.hasNext()) {
-			ConcurrentHashMap.Entry<String, UserInfo> pair = (ConcurrentHashMap.Entry<String, UserInfo>) it.next();
-			System.out.println(pair.getKey() + ", " + pair.getValue().getPassword() + ", " + pair.getValue().getPunteggio() + ", " + pair.getValue().getConnesso());
-		}
+	public ConcurrentHashMap<SelectableChannel, String> getChannelUtenti() {
+		return channelUtenti;
 	}
-	
-	public void stampaUtenti() {
-		Iterator<Entry<String, ArrayList<String>>> it = utenti.entrySet().iterator();
-		while (it.hasNext()) {
-			ConcurrentHashMap.Entry<String, ArrayList<String>> pair = (ConcurrentHashMap.Entry<String, ArrayList<String>>) it.next();
-			System.out.print(pair.getKey() + ", Amici -> ");
-			for(String amici : pair.getValue())
-				System.out.print(amici + ", ");
-			System.out.println();
-		}
+
+	public void setChannelUtenti(ConcurrentHashMap<SelectableChannel, String> channelUtenti) {
+		this.channelUtenti = channelUtenti;
 	}
 }

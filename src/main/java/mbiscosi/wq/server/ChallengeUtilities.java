@@ -18,14 +18,20 @@ import org.json.simple.parser.ParseException;
 
 
 public class ChallengeUtilities {
+	/*
+	 * Classe utilizzata per gestire le info delle sfide
+	 */
 	
+	//Indicano se lo sfidante o lo sfidato hanno gia' terminato la sfida
 	private int userSfidante;
 	private int userSfidato;
 	
 	private int serverRaggiungibile = 1;
 	
 	private ReentrantLock lockParoleSfida;
+	//lista delle parole della sfida
 	private ArrayList<String> paroleSfida;
+	//lista delle varie traduzioni delle parole della sfida
 	private ArrayList<ArrayList<String>> traduzione;
 	private int puntSfidante;
 	private int puntSfidato;
@@ -49,10 +55,10 @@ public class ChallengeUtilities {
 		
 		Random rand = new Random();
 		
+		//Generazione casuale delle parole della sfida (vengono prese randomicamente dalla lista delle parole)
 		for(int i = 0; i < numParole; i++) {
 			String parola = server.getParole().get(rand.nextInt(server.getParole().size()));
 			
-			System.out.println(parola);
 			
 			paroleSfida.add(parola);
 		}
@@ -61,7 +67,16 @@ public class ChallengeUtilities {
 	
 	
 	
-	//Metodo per tradurre le parole
+	/*
+	 * TRADUZIONE PAROLE
+	 * 
+	 * Metodo utilizzato all'avvio della sfida, da parte del server, per tradurre tutte le parole della sfida.
+	 * Essendoci varie traduzioni possibili per ogni parola, mi salvo tutte le traduzioni (per questo ArrayList<ArrayList<String>>)
+	 * 
+	 * Returns:
+	 * 
+	 * Exceptions: IOException, lanciata in caso il server non sia disponibile
+	 */
 	public void translateWords() throws IOException{
 		
 		this.traduzione = new ArrayList<ArrayList<String>>(this.numParole);
@@ -69,6 +84,7 @@ public class ChallengeUtilities {
 		int i = 0;
 		
         for (String word : paroleSfida) {
+        	//Richiedo all'url la parola
             URL url1 = new URL("https://api.mymemory.translated.net/get?q=" + word + "&langpair=it|en");
 
             try (BufferedReader in = new BufferedReader(new InputStreamReader(url1.openStream()))) {
@@ -88,11 +104,10 @@ public class ChallengeUtilities {
                     JSONArray array = (JSONArray) jsonObject.get("matches");
                     
                     ArrayList<String> tmpArray = new ArrayList<String>(array.size());
-
+                    //Prendo il JSON ricevuto e per ogni elemento prendo solamente la traduzione e la inserisco nella ArrayList
                     for (Object o : array) {
                         JSONObject obj = (JSONObject) o;
                         String stampa1 = (String) obj.get("translation");
-                        System.out.println(stampa1);
                         tmpArray.add(stampa1);
                     }
                     
@@ -111,6 +126,17 @@ public class ChallengeUtilities {
 	
 	
 	
+	
+	/*
+	 * CONTROLLO PAROLE
+	 * 
+	 * Metodo utilizzato per controllare se la traduzione inserita corrisponde
+	 * ad almeno una delle varie traduzioni fornite dal server di traduzione
+	 * 
+	 * Returns: 
+	 * 
+	 * Exceptions:
+	 */
 	public String checkWords(int index, String traduzione, int tipo) {
 		int checkTraduzione = 0;
 		

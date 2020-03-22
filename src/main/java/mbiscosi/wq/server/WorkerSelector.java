@@ -15,11 +15,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 
 public class WorkerSelector implements Runnable{
+	/*
+	 * Classe che gestisce le varie richieste dei clients
+	 */
 
 	private static final int BUFFER_SIZE = 2048;
 	private boolean terminate = false;
 	private Selector selector;
-	private EventHandler req;
 	private ServerService server;
 	private int selectorNum;
 
@@ -28,6 +30,8 @@ public class WorkerSelector implements Runnable{
 	public WorkerSelector(ServerService server, int selectorNum) throws IOException{
 		this.selector = Selector.open();
 		this.server = server;
+		
+		//identificatore del selector
 		this.selectorNum = selectorNum;
 	}
 	
@@ -83,17 +87,16 @@ public class WorkerSelector implements Runnable{
 	
 	
 	
-
+	/*
+	 * Metodo utilizzato per leggere le richieste dei clients, una volta lette
+	 * creo un nuovo oggetto di tipo EventHandler che utilizzero' per gestire le richieste
+	 */
 	private void readRequest(SelectionKey key) {
-
-		System.out.println("Messaggio arrivato");
 
 		SocketChannel client = (SocketChannel) key.channel();	
 		Utilities tmp = (Utilities) key.attachment();
 		ByteBuffer buffer = tmp.buffer;
-		
-		System.out.println("Arriva richiesta di lettura...");
-		
+				
 		
 		//leggo il nuovo messaggio a blocchi di 1024 bytes
 		try {
@@ -126,9 +129,8 @@ public class WorkerSelector implements Runnable{
 			byte[] requestBytes = new byte[readed];
 			buffer.get(requestBytes, 0, readed);
 			String request = new String(requestBytes);
-			System.out.println(request);
 			
-			req = new EventHandler(request, server, key.channel(), key, selectorNum);
+			tmp.setReq(new EventHandler(request, server, key.channel(), key, selectorNum));
 			
 			buffer.clear();
 		} catch (IOException e) {
@@ -145,7 +147,9 @@ public class WorkerSelector implements Runnable{
 	
 	
 	
-	
+	/*
+	 * Metodo utilizzato per gestire le risposte ai clients
+	 */
 	private void writeResponse(SelectionKey key) {
 		
 
@@ -157,8 +161,11 @@ public class WorkerSelector implements Runnable{
 		try {
 			String response;
 			
+			//Gestisco le richieste
 			if(tmp.getInSfida() == 0) {
-				response = req.process();
+				response = tmp.getReq().process();
+				
+				//Caso particolare utilizzato per gestire la richiesta di sfida da parte di un client A
 				if(response.equals("attesaSfida")) {
 					key.interestOps(SelectionKey.OP_READ);
 					return;
@@ -166,9 +173,9 @@ public class WorkerSelector implements Runnable{
 				
 				byte[] resp = response.getBytes();
 				buffer.put(resp);
-				System.out.println(response);
 			}
 			else
+				//Utilizzato per gestire la richiesta di sfida
 				tmp.setInSfida(0);
 			
 
@@ -197,21 +204,64 @@ public class WorkerSelector implements Runnable{
 	
 	
 	
-	
-	
+	/*
+	 * Metodo utilizzato per chiudere la connessione ed eliminare eventuali dati inutili dei client che si disconnettono
+	 */
 	private void chiudiConnessione(SelectableChannel selectableChannel) {
-		Iterator<Entry<String, UserInfo>> it = server.getConnessioni().entrySet().iterator();
-		while (it.hasNext()) {
-			ConcurrentHashMap.Entry<String, UserInfo> pair = (ConcurrentHashMap.Entry<String, UserInfo>) it.next();
-			if(pair.getValue().getSocketChannel() != null && pair.getValue().getSocketChannel().isOpen()) {
-				pair.getValue().setSocketChannel(null);
-				pair.getValue().setConnesso(0);
+		if(server.getChannelUtenti().containsKey(selectableChannel)) {
+			//Qui modifico i dati presenti nella map "connessioni"
+			String utente = server.getChannelUtenti().get(selectableChannel);
+			
+			
+			UserInfo tmpInfo = server.getConnessioni().get(utente);
+			
+			tmpInfo.setSocketChannel(null);
+			tmpInfo.setConnesso(0);
+			tmpInfo.setAttualmenteInSfida(0);
+			
+			
+			String keySfida = tmpInfo.getKeySfida();
+			//Qui controllo che l'utente non sia in sfida altrimenti modifico i valori corretti per indicare che l'utente si e' disconnesso
+			if(keySfida != null) {
+				if(server.getMapSfida().containsKey(keySfida)) {
+					ChallengeUtilities tmp = server.getMapSfida().get(keySfida);
+					switch(tmpInfo.getTipo()) {
+						case 0:
+							//Caso dello sfidante
+							tmp.getLockParoleSfida().lock();
+							if(tmp.getUserSfidato() == 1) {
+								tmp.getLockParoleSfida().unlock();
+								server.getMapSfida().remove(keySfida);
+							}
+							else {
+								tmp.setUserSfidante(1);
+								tmp.getLockParoleSfida().unlock();
+							}
+							
+							break;
+							
+						case 1:
+							//Caso dello sfidato
+							tmp.getLockParoleSfida().lock();
+							if(tmp.getUserSfidante() == 1) {
+								tmp.getLockParoleSfida().unlock();
+								server.getMapSfida().remove(keySfida);
+							}
+							else {
+								tmp.setUserSfidato(1);
+								tmp.getLockParoleSfida().unlock();
+							}
+							
+							break;
+					}
+				}
 			}
 		}
 	}
 	
 	
 	
+	//Metodo utilizzato per aggiungere il client al selector
 	public void addClient(SocketChannel client) throws IOException{
 		System.out.println(client);
 		client.configureBlocking(false);
@@ -233,11 +283,15 @@ public class WorkerSelector implements Runnable{
 		selector.wakeup();
 	}
 	
+	
+	//Classe utilizzata per assegnare ad ogni chiave del selector, un insieme di valori utilizzati per le diverse operazioni
 	public class Utilities {
 		public ByteBuffer buffer;
 		public long timer;
 		private int inSfida;
 		private int sfidaAccetta;
+		private EventHandler req;
+		
 		
 		public Utilities() {
 			buffer = ByteBuffer.allocate(BUFFER_SIZE);
@@ -259,5 +313,14 @@ public class WorkerSelector implements Runnable{
 		public void setSfidaAccetta(int sfidaAccetta) {
 			this.sfidaAccetta = sfidaAccetta;
 		}
+
+		public EventHandler getReq() {
+			return req;
+		}
+
+		public void setReq(EventHandler req) {
+			this.req = req;
+		}
+
 	}
 }

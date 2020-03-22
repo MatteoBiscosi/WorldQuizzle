@@ -13,14 +13,19 @@ import java.util.Scanner;
 
 
 public class MainClassServer {
+	/*
+	 * Classe main del server, questa classe avvia tutti i componenti del server
+	 */
 
 	public static void main(String[] args) {
+		/*
+		 * Prende in input la porta su cui il server si mettera' in ascolto; se non viene inserito nessun dato,
+		 * viene utilizzata la porta di default 13200
+		 */
 		ServerService server;
 		Registry reg;
 		ConnectionInterface stub;
-		long timer = System.currentTimeMillis();
 		
-		//System.setProperty("java.rmi.server.hostname","192.168.56.1");
 		//Controllo i parametri in Input
 		
 		if(args.length != 1)			
@@ -38,7 +43,6 @@ public class MainClassServer {
 				server = new ServerService(-1);
 			}
 		}
-		System.out.println("Secondi: " + (System.currentTimeMillis() - timer));
 
 		
 		
@@ -50,7 +54,6 @@ public class MainClassServer {
 			
 			
 			reg = LocateRegistry.createRegistry(1099);
-			//reg = LocateRegistry.getRegistry();
 			
 			reg.rebind("registrazione", stub);
 			
@@ -59,7 +62,6 @@ public class MainClassServer {
 			//Creo il thread del server e lo mando in esecuzione
 			Thread thread = new Thread(server);
 			thread.start();
-			System.out.println("Server in esecuzione..., secondi: " + (System.currentTimeMillis() - timer));
 			
 			
 			//Ora mi metto in attesa e se inserisco la stringa "termina", 
@@ -88,7 +90,7 @@ public class MainClassServer {
 				e.printStackTrace();
 			}
 			sc.close();
-			System.out.println("Server terminato...");			
+			System.out.println("Server terminato...");		
 		} catch (RemoteException e) {
 			e.printStackTrace();
 		}

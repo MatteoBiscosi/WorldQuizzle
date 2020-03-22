@@ -18,6 +18,12 @@ import java.util.Random;
 
 
 public class UdpHandler implements Runnable{
+	/*
+	 * Classe utilizzata per ricevere le sfide dagli altri giocatori,
+	 * al momento del logout verrà automaticamente chiusa
+	 */
+	
+	
 	//Dimensione standard del buffer e variabili per il calcolo dei tempi
 	private static int DEFAULT_SIZE = 1024;
 	
@@ -68,8 +74,8 @@ public class UdpHandler implements Runnable{
 			try {
 				selector.select();
 				Iterator<SelectionKey> iterator = selector.selectedKeys().iterator();
+
 				
-				System.out.println("Server sveglio");
 				//Scorro l'iterator con le chiavi che avevo "attivato"
 				while(iterator.hasNext()) {
 					SelectionKey clientKey = (SelectionKey) iterator.next();
@@ -95,8 +101,6 @@ public class UdpHandler implements Runnable{
 				}
 			}
 		}
-		
-		System.out.println("Server UDP in chiusura");
 		
 		//In caso di richiesta termino il server
 		try {
@@ -142,18 +146,17 @@ public class UdpHandler implements Runnable{
 
 	
 	
+	//Metodo usato per chiudere correttamente il client UDP
 	public static void shutdown() {
 		terminate = true;
 		selector.wakeup();
-		System.out.println("Server svegliato");
 	}
 	
 	
+	
+	//Timeout per gestire la richiesta di sfida
 	private void timeout() {
-		try {
-			Thread.sleep(10000);
-		} catch (InterruptedException e) {}
-		
+		while(System.currentTimeMillis() - MainClassClient.getTimer() < 10000) {}
 		
 		if(MainClassClient.getSfidaVisualizzata()) {
 			MainClassClient.setSfidaVisualizzata(false);
@@ -164,7 +167,6 @@ public class UdpHandler implements Runnable{
 			MainClassClient.setSfidaVisualizzata(false);
 			MainClassClient.sfida.set(false);
 			MainClassClient.sendNo();
-			System.out.println("Timer scaduto, sfida annullata...");
 		}
 	}
 }

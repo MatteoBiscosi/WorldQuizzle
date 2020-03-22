@@ -9,6 +9,8 @@ import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import mbiscosi.wq.server.ServerService;
+
 
 
 public class MainClassClient {
@@ -30,87 +32,49 @@ public class MainClassClient {
 	
 	public static void main(String[] args) {
 		
-	
-		op = new OperationsImpl(address, client);
+	/*
+	 * Il programma client prende in input un solo argomento, che rappresenta la porta.
+	 * Di default, se non viene inserito nessun parametro in ingresso o se la porta non è corretta,
+	 * verra' assegnato automaticamente la porta 13200.
+	 */
+		
+		switch(args.length) {
+			case 0:
+				op = new OperationsImpl(address, client, -1);
+				break;
+			case 1:
+				try {
+					op = new OperationsImpl(address, client, Integer.parseInt(args[0]));
+				} catch (RuntimeException ex) {
+					System.out.println("La porta inserita non è valida, verrà impostata la porta di default 13200.");
+					op = new OperationsImpl(address, client, -1);
+				}
+				break;
+			
+			default:
+				System.out.println("Inseriti troppi parametri, verrà impostata la porta di default 13200.");
+				break;
+		}
 		
 		
-		//Parametri usati per leggere la stringa messa in input
+		
+		
+		//Parametri usati per leggere la stringa messa in input da tastiera
 		reader = new BufferedReader(new InputStreamReader(System.in));
 		String request = new String();
 		
-		System.out.println("Benvenuto in Word Quizzle");
+		System.out.println("Benvenuto in Word Quizzle\r\n");
 		
 		
-		//Ciclo continuo del client
+		
+		/*
+		 * Ciclo che autorizza l'utente a fare solamente 2 operazioni ossia la registrazione ed il login;
+		 * il resto delle operazioni sono permesse solo dopo aver effettuato il login.
+		 */
 		do {
-			
-			/*
-			 * Caso particolare della RICHIESTA DI SFIDA
-			 */
-			try {
-				if(sfida.get()) {
-					
-					setSfidaVisualizzata(true);
-					
-					System.out.println(richiestaSfida);
-					
-					if(System.currentTimeMillis() - timer > 10000) {
-						System.out.println("Timer scaduto, sfida annullata...");
-						sfida.set(false);
-						break;
-					}
-					
-					String[] splitting;
-					
-					splitting = richiestaSfida.split(" ");
-					
-					System.out.println("Sfida richiesta da " + splitting[1]);
-					
-					System.out.println("Si desidera accettare la sfida:\r\nSI\r\nNO");
-					
-					
-					request = reader.readLine();
-					
-					do {
-						if(request.equalsIgnoreCase("SI")) {
-							if(System.currentTimeMillis() - getTimer() > 10000) {
-								System.out.println("Timer scaduto, sfida annullata...");
-								op.accettaSfida("no", username, splitting[1]);
-								sfida.set(false);
-								break;
-							}
-							op.accettaSfida("si", username, splitting[1]);
-							break;
-						}
-						
-						else if(request.equalsIgnoreCase("NO")) {
-							if(System.currentTimeMillis() - getTimer() > 10000) {
-								System.out.println("Timer scaduto, sfidata annullata...");
-								System.out.println(op.accettaSfida("no", username, splitting[1]));
-								sfida.set(false);
-								break;
-							}
-							System.out.println(op.accettaSfida("no", username, splitting[1]));
-							break;
-						}
-						
-						System.out.println("Si prega di inserire una delle due risposte proposte...");
-					} while(true);
-				}
-			} catch(IOException e) {
-				System.err.println(e);
-				System.out.println("Errore nella lettura della sfida. Sfida annullata\r\n");
-				sfida.set(false);
-				continue;
-			}
-			
-			
-			
 			try {
 				request = reader.readLine();
 			} catch(IOException e2) {
-				//reader = new BufferedReader(new InputStreamReader(System.in));
-				//System.in.
 				continue;
 			}
 			
@@ -122,8 +86,6 @@ public class MainClassClient {
 				System.out.println("Errore nell'inserimento del comando, si prega di riprovare.\r\n");
 				continue;
 			}
-			
-			
 			
 			/*
 			 * REGISTRAZIONE
@@ -152,6 +114,9 @@ public class MainClassClient {
 				}
 				
 				String response = op.login(splitting[1], splitting[2]);
+				
+				if(response == null)
+					continue;
 				if(response.equals("Login avvenuto con successo"));
 					username = splitting[1];
 					
@@ -160,9 +125,130 @@ public class MainClassClient {
 			
 			
 			/*
+			 * TERMINAZIONE: permessa solamente prima di fare il login, dopo aver effettuatao il login, il client terminerà
+			 * 					automaticamente dopo aver effettuato l'operazione di logout
+			 */
+			else if(request.equalsIgnoreCase("termina"))
+				return;
+			
+			//Mostra i vari comandi
+			else if(request.equalsIgnoreCase("help"))
+				op.help();
+			
+			
+			else 
+				System.out.println("\r\nComando non riconosciuto...\r\n");
+			
+			
+		} while(username == null);
+		
+		
+		
+		
+		
+		//Ciclo continuo del client dopo aver effettuato il login
+		do {
+			
+			/*
+			 * Caso particolare della RICHIESTA DI SFIDA, ossia un altro utente ha richiesto una sfida 
+			 * con questo utente. Verrà richiesto se si vuole accettare la sfida o meno.
+			 * è possibile rispondere solamente entro un tempo limite di 10 Sec, altrimenti 
+			 * sarà automaticamente rifiutata.
+			 */
+			try {
+				if(sfida.get()) {
+					
+					
+					if(System.currentTimeMillis() - timer > 10000) {
+						System.out.println("Timer scaduto, sfida annullata...");
+						sfida.set(false);
+						continue;
+					}
+					
+					String[] splitting;
+					
+					splitting = richiestaSfida.split(" ");
+					
+					System.out.println("Sfida richiesta da " + splitting[1]);
+					
+					System.out.println("Si desidera accettare la sfida:\r\nSI\r\nNO");
+					
+					
+					request = reader.readLine();
+					
+					setSfidaVisualizzata(true);
+					
+					//Parsing della risposta alla richiesta di sfida
+					do {
+						if(sfida.get() == false) {
+							break;
+						}
+							
+						//Risposta positiva
+						if(request.equalsIgnoreCase("SI")) {
+							if(System.currentTimeMillis() - getTimer() > 10000) {
+								System.out.println("Timer scaduto, sfida annullata...");
+								sfida.set(false);
+								break;
+							}
+							op.accettaSfida("si", username, splitting[1]);
+							break;
+						}
+						
+						//Risposta negativa
+						else if(request.equalsIgnoreCase("NO")) {
+							if(System.currentTimeMillis() - getTimer() > 10000) {
+								System.out.println("Timer scaduto, sfida annullata...");
+								sfida.set(false);
+								break;
+							}
+							System.out.println(op.accettaSfida("no", username, splitting[1]));
+							break;
+						}
+						
+						//Risposta non valida
+						System.out.println("Si prega di inserire una delle due risposte proposte...");
+					} while(true);
+				}
+			} catch(IOException e) {
+				System.err.println(e);
+				System.out.println("Errore nella lettura della sfida. Sfida annullata\r\n");
+				sfida.set(false);
+				continue;
+			}
+			
+			
+			
+			
+			/*
+			 * Casi standard
+			 */
+			
+			try {
+				request = reader.readLine();
+			} catch(IOException e2) {
+				continue;
+			}
+			
+			String[] splitting;
+			
+			try {
+				splitting = request.split(" ");
+			} catch(NullPointerException e) {
+				System.out.println("Errore nell'inserimento del comando, si prega di riprovare.\r\n");
+				continue;
+			}
+			
+			
+			/*
+			 * Tutte le info dettagliate si trova nell'interfaccia Operations
+			 */
+			
+			
+			/*
 			 * LOGOUT
 			 */
-			else if(splitting[0].equalsIgnoreCase("logout")) {
+			if(splitting[0].equalsIgnoreCase("logout")) {
 				if(splitting.length != 1) {
 					System.out.println("Errore nell'inserimento dei paramentri;\r\nlogout\r\n");
 					continue;
@@ -170,6 +256,7 @@ public class MainClassClient {
 				
 				System.out.println(op.logout(username));
 				username = null;
+				return;
 			}
 			
 			
@@ -240,29 +327,36 @@ public class MainClassClient {
 					continue;
 				}
 				
-				op.sfida(username, splitting[1]);
+				String tmp = op.sfida(username, splitting[1]);
+				
+				//Se e' null vuol dire che la sfida e' avvenuta
+				if(tmp != null)
+					System.out.println(tmp);
 			}
 			
-			
-			
-			
-			/*
-			 * TERMINAZIONE
-			 */
-			else if(request.equals("termina"))
-				terminazione = true;
+			//Mostra i vari comandi
+			else if(request.equalsIgnoreCase("help"))
+				op.help();
 			
 			
 			/*
 			 * Caso di default, nessun comando corretto inserito
 			 */
-			else 
-				System.out.println("\r\nComando non riconosciuto...\r\n");
-			
-			System.out.println();
-			
+			else {
+				if(sfida.get())
+					continue;
+				else
+					System.out.println("\r\nComando non riconosciuto...\r\n");
+			}
+						
 		} while(!terminazione);
 	}
+	
+	
+	
+	
+	
+	
 	
 	
 	public static synchronized long getTimer() {
@@ -287,7 +381,7 @@ public class MainClassClient {
 
 	public static void sendNo() {
 		String[] splitting = richiestaSfida.split(" ");
-		System.out.println("Timer scaduto, sfidata annullata...");
+		System.out.println("Timer scaduto, sfida annullata...");
 		op.accettaSfida("no", username, splitting[1]);
 		sfida.set(false);
 	}

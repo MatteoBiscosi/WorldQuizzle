@@ -24,6 +24,9 @@ import org.json.simple.parser.ParseException;
  * Questa classe crea il file .json
  */
 public class JsonCreator {
+	/*
+	 * Classe utilizzata per gestire i vari file e operazioni sul JSON
+	 */
 	private File file;
 	private File dictionary;
 	private ServerService server;
@@ -31,7 +34,9 @@ public class JsonCreator {
 	
 	//Crea un nuovo file .json
 	public JsonCreator(ServerService server) {
+		//File degli utenti 
 		file = new File("Utenti.json");
+		//Dizionario delle parole
 		dictionary = new File("Parole.json");
 		this.server = server;
 		lock = new ReentrantLock();
@@ -50,7 +55,16 @@ public class JsonCreator {
 	
 	
 	
-	
+	/*
+	 * CREA JSON
+	 * 
+	 * Metodo utilizzato per creare il file JSON in caso all'avvio del server esso non esista, inoltre
+	 * Legge il JSON contenente le parole da tradurre durante le sfide e le carica nella apposita map
+	 * 
+	 * Returns:
+	 * 
+	 * Exceptions:
+	 */
 	public void createJson() {
 		JSONObject fileJson = new JSONObject();
 		JSONArray utenti = new JSONArray();
@@ -59,7 +73,7 @@ public class JsonCreator {
 		
 		//A questo punto scrivo l'oggetto di tipo JSONObject sul
 		//file json e termino la creazione del file
-		try {
+		try (FileChannel reader2 = FileChannel.open(dictionary.toPath(), StandardOpenOption.READ)) {
 			//Apro un fileChannel in scrittura e alloco un byte buffer della dimensione del file
 			FileChannel outChannel = FileChannel.open(file.toPath(), StandardOpenOption.WRITE);
 			String text = fileJson.toJSONString();
@@ -74,7 +88,38 @@ public class JsonCreator {
 			
 			//Resetto la position
 			buffer.clear();
+			
+			//Qui leggo il file contenente le parole da tradurre durante la sfida
+			JSONParser dictionaryParser = new JSONParser();
+			int dictionarySize = (int) dictionary.length();
+			
+			ByteBuffer dicBuffer = ByteBuffer.allocate(dictionarySize);
+			int bytesDic = 0;
+			
+			//Controllo che abbia letto tutto il file
+			while(bytesDic != dictionarySize) {
+				bytesDic += reader2.read(dicBuffer);
+			}
+			
+			//Una volta letto il file, lo faccio diventare una Stringa
+			String textDic = new String(dicBuffer.array());
+			
+			//Faccio il parsing del JSON file
+			Object obj2 = dictionaryParser.parse(textDic);
+			
+			JSONObject tmp2 = (JSONObject) obj2;
+			
+			JSONArray parole = (JSONArray) tmp2.get("Parole");
+			
+			Iterator<String> externIt2 = parole.iterator();
+			
+			while(externIt2.hasNext()) {
+				String parola = externIt2.next();
+				server.getParole().add(parola);
+			}
 		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (ParseException e) {
 			e.printStackTrace();
 		}
 	}
@@ -82,6 +127,17 @@ public class JsonCreator {
 	
 	
 	
+	
+	/*
+	 * LEGGI JSON
+	 * 
+	 * Metodo utilizzato per leggere tutto il file JSON degli utenti ed il 
+	 * dizionario per caricare tutti i dati nelle varie strutture.
+	 * 
+	 * Returns:
+	 * 
+	 * Exceptions:
+	 */
 	public void leggiJSON() {
 		//In questo metodo leggo il JSON e per ogni oggetto di tipo JSONObject contenuto
 		//all'interno dell'array JSONArray, lo mando al ThreadPoolExecutor
@@ -153,7 +209,19 @@ public class JsonCreator {
 	
 	
 	
-	
+	/*
+	 * SCRIVI JSON
+	 * 
+	 * Metodo utilizzato per modificare dei parametri all'interno del JSON contente le info degli utenti.
+	 * Tali modifiche sono:
+	 * - aggiunta di un nuovo utente;
+	 * - aggiunta di un amico alla lista amici;
+	 * - modifica del punteggio
+	 * 
+	 * Returns:
+	 * 
+	 * Exceptions:
+	 */
 	public synchronized void scriviJSON(String username, String password, String userAmico, String punteggio) {
 		//In questo metodo leggo il JSON e per ogni oggetto di tipo JSONObject contenuto
 		//all'interno dell'array JSONArray, lo mando al ThreadPoolExecutor
@@ -194,6 +262,7 @@ public class JsonCreator {
 				
 				JSONArray utenti = (JSONArray) tmp.get("Utenti");
 				
+				//Caso di aggiunta di un nuovo utente
 				if(password != null) {
 					JSONObject tmp2 = new JSONObject();
 					tmp2.put("Username", username);
@@ -204,10 +273,12 @@ public class JsonCreator {
 					utenti.add(tmp2);
 				}
 				
+				//Caso di aggiunta di un amico
 				else if(userAmico != null){
 					aggiungiAmico(username, utenti, userAmico);
 				}
 				
+				//Caso di modifica del punteggio
 				else if(punteggio != null) {
 					modificaPunteggio(username, utenti, Integer.parseInt(punteggio));
 				}
@@ -237,7 +308,7 @@ public class JsonCreator {
 	
 	
 	/*
-	 * Procedura usata per scorrere la lista di amici di un Utente
+	 * Metodo usato per scorrere le info di un Utente
 	 * Che si trova all'interno del file JSON
 	 */
 	public void LettoreJSONObj(JSONObject utente) {
@@ -263,7 +334,9 @@ public class JsonCreator {
 	
 	
 	
-	
+	/*
+	 * Metodo utilizzato per aggiungere un amico alla lista di amici dell'utente username
+	 */
 	public void aggiungiAmico(String username, JSONArray utenti, String userAmico) {
 		
 		int counter = 0;
@@ -302,6 +375,9 @@ public class JsonCreator {
 	
 	
 	
+	/*
+	 * Metodo utilizzato per modificare il punteggio di username
+	 */
 	public void modificaPunteggio(String username, JSONArray utenti, int punteggio) {
 		
 		int counter = 0;
@@ -319,7 +395,9 @@ public class JsonCreator {
 	
 	
 	
-	
+	/*
+	 * Metodo utilizzato per scrivere la lista di amici di un utente in formato String
+	 */
 	public String scriviJSONAmici(ArrayList<?> amici, int classifica) {
 		
 		String response = null;
@@ -327,6 +405,7 @@ public class JsonCreator {
 		JSONObject tmp = new JSONObject();
 		JSONArray tmp2 = new JSONArray();		
 		
+		//Caso in cui voglia scrivere la lista di amici
 		if(classifica == 0) {
 			ArrayList<String> tempAmici = (ArrayList<String>) amici;
 			for(String nomeAmico : tempAmici) {
@@ -339,6 +418,7 @@ public class JsonCreator {
 			}
 		}
 		
+		//Caso in cui voglia scrivere la classifica della lista di amici
 		else {
 			ArrayList<UtilityUserInfo> tempAmici = (ArrayList<UtilityUserInfo>) amici;
 			
@@ -359,12 +439,14 @@ public class JsonCreator {
 
 		response = tmp.toJSONString();
 		
-		System.out.println(response);
 		
 		return response;
 	}
 	
 	
+	/*
+	 * Metodo utilizzato per ordinare gli amici in base al punteggio
+	 */
 	private class SortAmici implements Comparator<UtilityUserInfo> {
 
 		@Override

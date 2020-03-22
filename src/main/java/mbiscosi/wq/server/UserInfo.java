@@ -7,6 +7,11 @@ import java.util.concurrent.locks.ReentrantLock;
 
 
 public class UserInfo {
+	/*
+	 * Classe utilizzata per contenere tutte le informazioni relative ai diversi clients.
+	 * Queste info verranno caricate all'avvio del server dalla classe JsonCreator.
+	 * La classe ha solamente metodi getters and setters per gestire le varie info.
+	 */
 	
 	private String password;
 	private int connesso;
@@ -17,6 +22,9 @@ public class UserInfo {
 	private int udpPort;
 	private int selectorNum;
 	private SelectionKey key;
+	
+	private String keySfida;
+	private int tipo;
 	
 
 	public UserInfo(String password, int punteggio) {
@@ -52,7 +60,7 @@ public class UserInfo {
 	}
 	
 	public void setPunteggio(int punteggio) {
-		this.punteggio += punteggio;
+		this.punteggio = punteggio;
 	}
 	
 	public int getAttualmenteInSfida() {
@@ -89,5 +97,21 @@ public class UserInfo {
 
 	public void setKey(SelectionKey key) {
 		this.key = key;
+	}
+	
+	public String getKeySfida() {
+		return keySfida;
+	}
+
+	public void setKeySfida(String keySfida) {
+		this.keySfida = keySfida;
+	}
+
+	public int getTipo() {
+		return tipo;
+	}
+
+	public void setTipo(int tipo) {
+		this.tipo = tipo;
 	}
 }
